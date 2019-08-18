@@ -1,0 +1,2 @@
+lesson_textures.o: lesson_textures.cpp ../include/shader_class.h \
+ ../include/utils.h ../include/stb_image.h
