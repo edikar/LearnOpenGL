@@ -1,2 +1,3 @@
 # LearnOpenGL
-exercises for learnopengl.com course
+
+_ exercises for learnopengl.com course
