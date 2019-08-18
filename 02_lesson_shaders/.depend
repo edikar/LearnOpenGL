@@ -1,1 +1,1 @@
-lesson_shaders.o: lesson_shaders.cpp shader_class.h
+lesson_shaders.o: lesson_shaders.cpp ../include/shader_class.h
