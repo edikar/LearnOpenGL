@@ -27,7 +27,7 @@ depend: .depend
 clean:
 	rm -f $(objects) || true
 	rm -f $(appname) || true
-	#in case we changed the base directory name - clean also all .out files
+#in case we changed the base directory name - clean also all .out files
 	rm -f *.out || true
 
 dist-clean: clean
