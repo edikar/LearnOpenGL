@@ -15,6 +15,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include "mesh.h"
 
 using namespace std;
 
@@ -233,6 +234,15 @@ int main()
         projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
         glm::mat4 normalMat = glm::transpose(glm::inverse(model));
 
+        
+        // bind diffuse map for cube object
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, diffuseMap);
+        // bind specular map for cube object
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, specularMap);
+
+
         // activate shader
         lightingShader.use();
 
@@ -275,7 +285,6 @@ int main()
         lightingShader.setVec3("spotLight.diffuse", glm::vec3(1.0f, 1.0f, 1.0f));
         lightingShader.setVec3("spotLight.specular", glm::vec3(1.0f, 1.0f, 1.0f));
 
-/*        ;*/
         lightingShader.setVec3("viewPos", camera.Position);   
 
         // set the model, view and projection matrix uniforms
@@ -284,13 +293,6 @@ int main()
         lightingShader.setMat4("projection", projection);
         lightingShader.setMat4("normalMat", normalMat);
         
-        // bind diffuse map for cube object
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, diffuseMap);
-        // bind specular map for cube object
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, specularMap);
-
         // render boxes
         glBindVertexArray(cubeVAO);
         //glDrawArrays(GL_TRIANGLES, 0, 36);

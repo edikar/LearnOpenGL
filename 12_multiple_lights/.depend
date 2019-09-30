@@ -176,4 +176,4 @@
  ../include/glm/gtc/../gtc/../ext/vector_uint1.hpp \
  ../include/glm/gtc/../gtc/../ext/vector_uint1_precision.hpp \
  ../include/glm/gtc/type_ptr.inl ../include/utils.h ../include/camera.h \
- ../include/stb_image.h
+ ../include/stb_image.h ../include/mesh.h
