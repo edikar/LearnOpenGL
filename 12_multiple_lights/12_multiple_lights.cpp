@@ -15,7 +15,6 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include "mesh.h"
 
 using namespace std;
 
@@ -136,7 +135,7 @@ int main()
     };
 
     PointLight pointLightProperties[] = {
-        // <Position>                      <const>  <linear>    <quadratic> <ambient>                       <diffuse (lamp color)>                       <specular>
+        // <Position>                      <const>  <linear>    <quadratic> <ambient>                       <diffuse (lamp color)>                       <specular>     <rotationVector>
         { glm::vec3( 0.7f,  10.2f,  -5.0f),   1.0f,    0.045f,    0.0075f,    glm::vec3(0.2f, 0.2f, 0.2f),    glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f)},
         { glm::vec3( 10.3f, -3.3f, -4.0f),   1.0f,    0.045f,    0.0075f,    glm::vec3(0.2f, 0.2f, 0.2f),    glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, -1.0f, 1.0f)},
         { glm::vec3(-14.0f,  2.0f, 0.0f),  1.0f,    0.045f,    0.0075f,    glm::vec3(0.2f, 0.2f, 0.2f),    glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f)},

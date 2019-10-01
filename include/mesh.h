@@ -11,6 +11,7 @@
 #include <sstream>
 #include <iostream>
 #include <vector>
+#include "utils.h"
 using namespace std;
 
 struct Vertex {
@@ -77,9 +78,12 @@ public:
 
                                                      // now set the sampler to the correct texture unit
             glUniform1i(glGetUniformLocation(shader.ID, (name + number).c_str()), i);
+
             // and finally bind the texture
             glBindTexture(GL_TEXTURE_2D, textures[i].id);
         }
+
+        glUniform1f(glGetUniformLocation(shader.ID, "material.shininess"), 16.0f);
         
         // draw mesh
         glBindVertexArray(VAO);
