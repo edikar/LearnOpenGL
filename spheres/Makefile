@@ -14,14 +14,14 @@ all: $(appname)
 	export LD_LIBRARY_PATH=../lib/ ; ./$(appname) || true
 	
 $(appname): $(objects)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $(appname) $(objects) $(LDFLAGS) $(LDLIBS) $(INC)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -g -o $(appname) $(objects) $(LDFLAGS) $(LDLIBS) $(INC)
 
 %.o: %.cpp
 	@echo "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaa" 
 	@echo  $(value objects)
 	@echo "BBBBBBBBBBBBBBBBBBBBBBBB"
 	
-	$(CXX) -c  $(CXXFLAGS) $(INC) $< -o $@
+	$(CXX) -g -c  $(CXXFLAGS) $(INC) $< -o $@
 
 depend: .depend
 

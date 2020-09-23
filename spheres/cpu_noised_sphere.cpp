@@ -34,9 +34,12 @@ unsigned int loadTexture(const char *path);
 void drawSphere();
 
 // settings
-const unsigned int SCR_WIDTH = 1600;
-const unsigned int SCR_HEIGHT = 1000;
+const unsigned int SCR_WIDTH = 800;
+const unsigned int SCR_HEIGHT = 600;
 
+#define DETALIZATION_ITERATIONS 6
+#define NUM_FACES (1<<(5+DETALIZATION_ITERATIONS*2))
+#define NUM_VERTICES ((1<<(4+DETALIZATION_ITERATIONS*2)) + 2)
 // camera
 Camera camera(glm::vec3(0.0f, 0.0f, 5.0f));
 float lastX = SCR_WIDTH / 2.0f;
@@ -50,59 +53,88 @@ float lastFrame = 0.0f;
 GLFWwindow* window;
 
 Shader *planetShader;
-Shader *oceanShader;
+Shader *oceanShader;;
+Shader *normalsShader;
 
 //light position
 glm::vec3 lightPos(0.0f, 0.0f, 8.0f);
 
 
 
-struct {
+typedef struct {
     vec3 position;
     vec3 normal;
-} vertices[0x100000] = {
+} VERTEX;
+VERTEX *vertices;
 
-    //  <---Position------->    <----Normal------>      <TexCoord>
-        vec3(-1.0f, 0.0f, 0.0f),     vec3(-1.0f,  0.0f, 0.0f),  //0
-        vec3(1.0f, 0.0f, 0.0f),      vec3(1.0f,  0.0f, 0.0f),  //1
-        vec3(0.0f, 1.0f, 0.0f),      vec3(0.0f,  1.0f, 0.0f),   //2
-        vec3(0.0f, -1.0f, 0.0f),     vec3(0.0f,  -1.0f, 0.0f),  //3
-        vec3(0.0f, 0.0f, 1.0f),      vec3(0.0f,  0.0f, 1.0f),   //4
-        vec3(0.0f, 0.0f, -1.0f),     vec3(0.0f,  0.0f, -1.0f),  //5
-};
+int *normalsPerVertex; //this is needed to count number of faces each vertex involved in to average the normal
 
+typedef struct {
+    int numNeighbours;
+    int neighbours[6];
+    int middleVertex[6];
+} USED_VERTICES;
+USED_VERTICES *usedVertices;   //this array stores the vertices which were already split in current iteration - to prevent creating same vertex twice
 
-struct {
+typedef struct {
     vec3 position;
     vec3 normal;
-} noisedVertices[0x100000];
+} NOISED_VERTEX;
+NOISED_VERTEX *noisedVertices;
 
-struct {
+
+typedef struct {
+    vec3 position;
+} NORMAL_POSITION;
+NORMAL_POSITION *normalsPositions;
+
+typedef struct {
     unsigned int v1;
     unsigned int v2;
     unsigned int v3;
-} faces[0x100000] = {  // note that we start from 0!
-    0, 4, 2,    //0
-    4, 1, 2,    //1
-    0, 3, 4,    //2
-    4, 3, 1,    //3
-    0, 2, 5,    //4
-    1, 5, 2,    //5
-    0, 5, 3,    //6
-    3, 5, 1     //7
-};
+} FACE;
+FACE *faces;
+
 int numVertices = 6;
 int numFaces = 8;
 
 
 unsigned int sphereVBO, sphereVAO, sphereEBO;
 unsigned int oceanVBO, oceanVAO, oceanEBO;
+unsigned int normalsVBO, normalsVAO;
+
+int getMiddleVertex(int p1, int p2){
+    for(int i = 0; i < usedVertices[p1].numNeighbours; i++){
+        if(usedVertices[p1].neighbours[i] == p2){
+            return usedVertices[p1].middleVertex[i];
+        }
+    }
+
+
+    int nextNeighbour1 = usedVertices[p1].numNeighbours;
+    int nextNeighbour2 = usedVertices[p2].numNeighbours;
+
+    vec3 v1 = vertices[p1].position;
+    vec3 v2 = vertices[p2].position;
+    
+    vertices[numVertices].position = vertices[numVertices].normal = normalize((v2 - v1) * 0.5f + v1);
+
+    usedVertices[p1].neighbours[nextNeighbour1] = p2;
+    usedVertices[p1].middleVertex[nextNeighbour1] = numVertices;
+    usedVertices[p1].numNeighbours++;
+    usedVertices[p2].neighbours[nextNeighbour2] = p1;
+    usedVertices[p2].middleVertex[nextNeighbour2] = numVertices;
+    usedVertices[p2].numNeighbours++;
+    return numVertices++;
+}
 
 void initializeSphere(){
     numVertices = 6;
     numFaces = 8;
+
     //generate sphere vertices
-    for(int iteration = 0; iteration < 7; iteration++){
+    for(int iteration = 0; iteration <= DETALIZATION_ITERATIONS; iteration++){
+        memset(usedVertices, 0, NUM_VERTICES * sizeof(USED_VERTICES));
         unsigned int currentNumFaces = numFaces;
         for(int face = 0; face < currentNumFaces; face++){
             /*     p3
@@ -115,18 +147,17 @@ void initializeSphere(){
             unsigned int p1 = faces[face].v1;
             unsigned int p2 = faces[face].v2;
             unsigned int p3 = faces[face].v3;
-            unsigned int n4 = numVertices;
-            unsigned int n5 = numVertices + 1;
-            unsigned int n6 = numVertices + 2;
 
             vec3 v1 = vertices[p1].position;
             vec3 v2 = vertices[p2].position;
             vec3 v3 = vertices[p3].position;
 
-            vertices[n4].position = vertices[n4].normal = normalize((v2 - v1) * 0.5f + v1);
-            vertices[n5].position = vertices[n5].normal = normalize((v3 - v2) * 0.5f + v2);
-            vertices[n6].position = vertices[n6].normal = normalize((v1 - v3) * 0.5f + v3);
-            
+            unsigned int n4, n5, n6; // new vertices
+
+            n4 = getMiddleVertex(p1,p2);
+            n5 = getMiddleVertex(p2,p3);
+            n6 = getMiddleVertex(p3,p1);
+
             //old big face becomes the middle triangle
             faces[face].v1 = n4;
             faces[face].v2 = n5;
@@ -143,11 +174,15 @@ void initializeSphere(){
             faces[numFaces + 2].v1 = n6;
             faces[numFaces + 2].v2 = n5;
             faces[numFaces + 2].v3 = p3;
-            
-            numVertices += 3;
+
             numFaces += 3;
         }
+
+        printf("iteration: %d, numFaces = %d (0x%x), numVertices = %d (0x%x)\n", iteration, numFaces, numFaces, numVertices, numVertices);
     }
+    printf("numVertices = %d NUM_VERTICES = %d\n", numVertices, NUM_VERTICES);
+    printf("max vertices = 0x%x\n", NUM_VERTICES);
+    printf("max faces = 0x%x\n", NUM_FACES);
 }
 
 void applyNoise(){
@@ -161,50 +196,64 @@ void applyNoise(){
         float noise = 0;
         float amplitude = 0.6f;
         float frequency = 1.0f;
-/*
-        float dx =0.001f, dy = 0.001f, dz = 0.001f;
-        float nx0 = 0, nx1 = 0, ny0 = 0 , ny1 = 0, nz0 = 0, nz1 = 0;*/
-
 
         for(int i = 0; i < 5; i++){
             noise += amplitude * (pn.noise(pos.x * frequency , pos.y * frequency , pos.z * frequency) + 0.3);
-/*            nx0 += amplitude * pn.noise((pos.x - dx) * frequency , pos.y * frequency , pos.z * frequency);
-            nx1 += amplitude * pn.noise((pos.x + dx) * frequency , pos.y * frequency , pos.z * frequency);
-
-            ny0 += amplitude * pn.noise((pos.x) * frequency , (pos.y - dy) * frequency , pos.z * frequency);
-            ny1 += amplitude * pn.noise((pos.x) * frequency , (pos.y + dy) * frequency , pos.z * frequency);
-
-            nz0 += amplitude * pn.noise((pos.x) * frequency , (pos.y) * frequency , (pos.z - dz) * frequency);
-            nz1 += amplitude * pn.noise((pos.x) * frequency , (pos.y) * frequency , (pos.z + dz)* frequency);
-*/
             frequency *= 2;
             amplitude *= 0.5f;
         }
 
-/*        vec3 vx0 = (pos - vec3(dx, 0, 0)) * nx0;
-        vec3 vx1 = (pos + vec3(dx, 0, 0)) * nx1;
-        
-        vec3 vy0 = (pos - vec3(0, dy, 0)) * ny0;
-        vec3 vy1 = (pos + vec3(0, dy, 0)) * ny1;
-        
-        vec3 vz0 = (pos - vec3(0, 0, dz)) * nz0;
-        vec3 vz1 = (pos + vec3(0, 0, dz)) * nz1;
-
-        vec3 c1 = -cross (vx1 - vx0 , vy1 - vy0);
-*/
-
-        //float f = 10.0f;
-        //float ridge = 1 + ridgeAmp * (1 - (std::abs(2*pn.noise(pos.x * f, pos.y * f, pos.z * f )-0.5f)));
-        
         noisedVertices[v].position = vertices[v].position * noise;
         noisedVertices[v].normal = normalize(noisedVertices[v].position);
         //noisedVertices[v].normal = normalize(c1);
         
-
         //make some waves in the ocean
         frequency = 40.0f;
         vertices[v].position = vertices[v].position + vec3(0.005f * pn.noise(pos.x * frequency , pos.y * frequency , pos.z * frequency));
         
+        normalsPositions[2 * v].position = noisedVertices[v].position;
+        normalsPositions[2 * v + 1].position = noisedVertices[v].position + normalize(noisedVertices[v].position)/40.0f;
+
+    }
+
+    //land normals calculation
+    memset(normalsPerVertex, 0, NUM_VERTICES * sizeof(int));
+    for(int f = 0; f < numFaces; f++){
+        vec3 v1 = noisedVertices[faces[f].v1].position;
+        vec3 v2 = noisedVertices[faces[f].v2].position;
+        vec3 v3 = noisedVertices[faces[f].v3].position;
+        noisedVertices[faces[f].v1].normal += normalize(cross(v2-v1 , v3 - v1));
+        normalsPerVertex[faces[f].v1]++;
+        noisedVertices[faces[f].v2].normal += normalize(cross(v3-v2 , v1 - v2));
+        normalsPerVertex[faces[f].v2]++;
+        noisedVertices[faces[f].v3].normal += normalize(cross(v1-v3 , v2 - v3));
+        normalsPerVertex[faces[f].v3]++;
+    }
+
+    for(int v = 0; v < numVertices; v++){
+        noisedVertices[v].normal /= normalsPerVertex[v];
+        normalsPositions[2 * v].position = noisedVertices[v].position;
+        normalsPositions[2 * v + 1].position = noisedVertices[v].position + noisedVertices[v].normal/40.0f;
+
+        vertices[v].normal /= normalsPerVertex[v];
+    }
+
+    //ocean normals calculations
+    memset(normalsPerVertex, 0, NUM_VERTICES * sizeof(int));
+    for(int f = 0; f < numFaces; f++){
+         vec3 v1 = vertices[faces[f].v1].position;
+         vec3 v2 = vertices[faces[f].v2].position;
+         vec3 v3 = vertices[faces[f].v3].position;
+         vertices[faces[f].v1].normal += normalize(cross(v2-v1 , v3 - v1));
+         normalsPerVertex[faces[f].v1]++;
+         vertices[faces[f].v2].normal += normalize(cross(v3-v2 , v1 - v2));
+         normalsPerVertex[faces[f].v2]++;
+         vertices[faces[f].v3].normal += normalize(cross(v1-v3 , v2 - v3));
+         normalsPerVertex[faces[f].v3]++;       
+    }
+
+    for(int v = 0; v < numVertices; v++){
+        vertices[v].normal /= normalsPerVertex[v];
     }
 }
 
@@ -224,15 +273,43 @@ int main()
     
     planetShader = new Shader("shaders/planetShader2.vs", "shaders/planetShader2.fs"/*, "shaders/planetShader2.gs"*/);
     oceanShader =  new Shader("shaders/oceanShader.vs", "shaders/oceanShader.fs"/*, "shaders/planetShader2.gs"*/);
+    normalsShader = new Shader("shaders/normalsShader.vs", "shaders/normalsShader.fs"/*, "shaders/planetShader2.gs"*/);
 
 
-    // load models
-    // -----------
-    Model ourModel("../models/nanosuit/nanosuit.obj");
+    //alloate all memories
+    faces = new FACE[NUM_FACES];// (FACE*)malloc(NUM_FACES * sizeof(FACE));
+    memset(faces, 0, NUM_FACES * sizeof(FACE));
+    faces[0] = { 0, 4, 2 };    //0
+    faces[1] = { 4, 1, 2 };    //1
+    faces[2] = { 0, 3, 4 };    //2
+    faces[3] = { 4, 3, 1 };  //3
+    faces[4] = { 0, 2, 5 };   //4
+    faces[5] = { 1, 5, 2 };    //5
+    faces[6] = { 0, 5, 3 };   //6
+    faces[7] = { 3, 5, 1 };    //7
 
-    // draw in wireframe
-    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    vertices = new VERTEX[NUM_VERTICES]; //(VERTEX*)malloc(NUM_VERTICES * sizeof(VERTEX));
+    memset(vertices, 0, NUM_VERTICES * sizeof(VERTEX));
+    vertices[0] = { vec3(-1.0f, 0.0f, 0.0f),     vec3(-1.0f,  0.0f, 0.0f) };  //0
+    vertices[1] = { vec3(1.0f, 0.0f, 0.0f),      vec3(1.0f,  0.0f, 0.0f) };  //1
+    vertices[2] = { vec3(0.0f, 1.0f, 0.0f),      vec3(0.0f,  1.0f, 0.0f) };   //2
+    vertices[3] = { vec3(0.0f, -1.0f, 0.0f),     vec3(0.0f,  -1.0f, 0.0f) };  //3
+    vertices[4] = { vec3(0.0f, 0.0f, 1.0f),      vec3(0.0f,  0.0f, 1.0f) };   //4
+    vertices[5] = { vec3(0.0f, 0.0f, -1.0f),     vec3(0.0f,  0.0f, -1.0f) };  //5
 
+    normalsPerVertex = new int[NUM_VERTICES]; //(int*)malloc(NUM_VERTICES * sizeof(int));
+    memset(normalsPerVertex, 0, NUM_VERTICES * sizeof(int));
+
+    usedVertices = new USED_VERTICES[NUM_VERTICES];
+    memset(usedVertices, 0, NUM_VERTICES * sizeof(USED_VERTICES));
+
+    noisedVertices = new NOISED_VERTEX[NUM_VERTICES];
+    memset(noisedVertices, 0, NUM_VERTICES * sizeof(NOISED_VERTEX));
+
+    normalsPositions = new NORMAL_POSITION[ 2 * NUM_VERTICES];
+    memset(normalsPositions, 0, 2 * NUM_VERTICES * sizeof(NORMAL_POSITION));
+
+    
     initializeSphere();
     applyNoise();
 
@@ -243,9 +320,9 @@ int main()
 
     glBindVertexArray(sphereVAO);
     glBindBuffer(GL_ARRAY_BUFFER, sphereVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(noisedVertices), noisedVertices, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, NUM_VERTICES * sizeof(NOISED_VERTEX), noisedVertices, GL_DYNAMIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sphereEBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(faces), faces, GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, NUM_FACES * sizeof(FACE), faces, GL_STATIC_DRAW);
     //vertex position
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
@@ -259,9 +336,10 @@ int main()
 
     glBindVertexArray(oceanVAO);
     glBindBuffer(GL_ARRAY_BUFFER, oceanVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, NUM_VERTICES * sizeof(VERTEX), vertices, GL_STATIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, oceanEBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(faces), faces, GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, NUM_FACES * sizeof(FACE), faces, GL_STATIC_DRAW);
+    
     //vertex position
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
@@ -269,9 +347,35 @@ int main()
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
+
+    glGenBuffers(1, &normalsVBO);
+    glGenVertexArrays(1, &normalsVAO);
+
+    glBindVertexArray(normalsVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, normalsVBO);
+    glBufferData(GL_ARRAY_BUFFER, 2 * NUM_VERTICES * sizeof(NORMAL_POSITION), normalsPositions, GL_STATIC_DRAW);
+    //vertex position
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    //free malloced arrays
+    delete[] faces;
+    delete[] vertices;
+    delete[] normalsPerVertex;
+    delete[] usedVertices;
+    delete[] noisedVertices;
+    delete[] normalsPositions;
+
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); 
     glEnable(GL_DEPTH_TEST);
+
+    //filled or wireframe triangles
+    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
@@ -308,16 +412,10 @@ int main()
 }
 
 void drawSphere(){
-    int numElements = (sizeof(faces)/sizeof(int));
     static float perlinOffset = 1.0;
     perlinOffset += 0.001;
 
     //applyNoise();
-
-
-    //filled or wireframe triangles
-    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
 
     //glm::mat4 lightPosTransform = glm::rotate(glm::mat4(1.0f),0.01f, glm::vec3(0.0f, -1.0f, 0.0f));
@@ -345,9 +443,9 @@ void drawSphere(){
 
     glBindVertexArray(sphereVAO);
     glBindBuffer(GL_ARRAY_BUFFER, sphereVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(noisedVertices), noisedVertices, GL_DYNAMIC_DRAW);
+    //glBufferData(GL_ARRAY_BUFFER, NUM_VERTICES * sizeof(NOISED_VERTEX), noisedVertices, GL_DYNAMIC_DRAW);
 //    glDrawArrays(GL_TRIANGLES, 0, numTriangles);
-    glDrawElements(GL_TRIANGLES, sizeof(faces), GL_UNSIGNED_INT, 0);
+    glDrawElements(GL_TRIANGLES, NUM_FACES * sizeof(FACE), GL_UNSIGNED_INT, 0);
 
 
     // activate shader
@@ -366,7 +464,18 @@ void drawSphere(){
     oceanShader->setFloat("time", (float)glfwGetTime()/100);
 
     glBindVertexArray(oceanVAO);
-    glDrawElements(GL_TRIANGLES, sizeof(faces), GL_UNSIGNED_INT, 0);
+    glDrawElements(GL_TRIANGLES, NUM_FACES * sizeof(FACE), GL_UNSIGNED_INT, 0);
+
+    // activate shader
+    normalsShader->use();
+    // set the model, view and projection matrix uniforms
+    normalsShader->setMat4("model", model);
+    normalsShader->setMat4("view", view);
+    normalsShader->setMat4("projection", projection);
+    normalsShader->setMat4("normalMat", normalMat);
+
+    glBindVertexArray(normalsVAO);
+    //glDrawArrays(GL_LINES, 0, 2*numVertices);
 
 
 
