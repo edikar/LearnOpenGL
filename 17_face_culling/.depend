@@ -1,4 +1,4 @@
-lesson_textures.o: lesson_textures.cpp ../include/shader_class.h \
+17_face_culling.o: 17_face_culling.cpp ../include/shader_class.h \
  ../include/glm/glm.hpp ../include/glm/detail/_fixes.hpp \
  ../include/glm/detail/setup.hpp ../include/glm/detail/../simd/platform.h \
  ../include/glm/fwd.hpp ../include/glm/detail/qualifier.hpp \
